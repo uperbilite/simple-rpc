@@ -41,10 +41,6 @@ func (c *Client) Invoke(ctx context.Context, req *message.Request) (*message.Res
 	data := message.EncodeReq(req)
 	Write(conn, data)
 
-	//if isOneway(ctx) {
-	//	return &message.Response{}, errors.New("client: 这是 oneway 调用")
-	//}
-
 	data = Read(conn)
 	res := message.DecodeResp(data)
 

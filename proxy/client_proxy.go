@@ -11,15 +11,15 @@ import (
 
 var messageId uint32 = 0
 
-type Proxy interface {
+type ClientProxy interface {
 	Invoke(ctx context.Context, req *message.Request) (*message.Response, error)
 }
 
-func InitServiceProxy(service Service, client *Client) error {
+func InitClientProxy(service Service, client *Client) error {
 	return setFuncField(service, client, client.serializer)
 }
 
-func setFuncField(service Service, proxy Proxy, serializer serialize.Serializer) error {
+func setFuncField(service Service, proxy ClientProxy, serializer serialize.Serializer) error {
 	if service == nil {
 		return errors.New("rpc: service 不能为 nil")
 	}

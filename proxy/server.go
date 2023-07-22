@@ -12,14 +12,14 @@ import (
 
 type Server struct {
 	addr        string
-	services    map[string]Service
+	services    map[string]*ServerStub
 	serializers map[uint8]serialize.Serializer
 }
 
 func NewServer(addr string, opts ...ServerOption) *Server {
 	res := &Server{
 		addr:        addr,
-		services:    make(map[string]Service, 16),
+		services:    make(map[string]*ServerStub, 16),
 		serializers: make(map[uint8]serialize.Serializer, 4),
 	}
 	res.RegisterSerializer(&json.Serializer{})
@@ -41,12 +41,20 @@ func ServerWithSerializer(serializer serialize.Serializer) ServerOption {
 
 func ServerWithService(service Service) ServerOption {
 	return func(server *Server) {
-		server.services[service.Name()] = service
+		server.services[service.Name()] = &ServerStub{
+			s:           service,
+			value:       reflect.ValueOf(service),
+			serializers: server.serializers,
+		}
 	}
 }
 
 func (s *Server) RegisterService(service Service) {
-	s.services[service.Name()] = service
+	s.services[service.Name()] = &ServerStub{
+		s:           service,
+		value:       reflect.ValueOf(service),
+		serializers: s.serializers,
+	}
 }
 
 func (s *Server) RegisterSerializer(serializer serialize.Serializer) {
@@ -89,32 +97,5 @@ func (s *Server) Invoke(ctx context.Context, req *message.Request) (*message.Res
 	if !ok {
 		return nil, fmt.Errorf("server: 未找到服务, 服务名 %s", req.ServiceName)
 	}
-
-	serializer, ok := s.serializers[req.Serializer]
-	if !ok {
-		return nil, fmt.Errorf("server: 未找到 serializer")
-	}
-
-	method := reflect.ValueOf(service).MethodByName(req.MethodName)
-
-	in := reflect.New(method.Type().In(1).Elem()).Interface()
-	err := serializer.Decode(req.Data, in)
-	if err != nil {
-		return nil, err
-	}
-
-	out := method.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(in)})
-	data, err := serializer.Encode(out[0].Interface())
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &message.Response{
-		BodyLength: uint32(len(data)),
-		MessageId:  req.MessageId,
-		Data:       data,
-	}
-	resp.SetHeadLength()
-
-	return resp, nil
+	return service.Invoke(ctx, req)
 }
